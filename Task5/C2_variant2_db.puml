@@ -1,0 +1,28 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+title C2 — Вариант 2: Изоляция на уровне отдельных БД (Shared Instance, Separate Databases)
+
+System_Ext(farm_agent_a, "Агент на ферме A (Толстый клиент)", "MVP-агент на ферме клиента A")
+System_Ext(farm_agent_b, "Агент на ферме B (Толстый клиент)", "MVP-агент на ферме клиента B")
+
+Container_Boundary(saas, "SaaS — Мультитенантная платформа") {
+    Container(api_gw, "API Gateway", "Kong / Nginx", "Маршрутизация")
+    Container(db_router, "DB Connection Router", "PgBouncer / Custom Proxy", "Маршрутизирует соединения к БД нужного тенанта на основе tenant_id")
+
+    Container_Boundary(shared_instance_boundary, "Shared PostgreSQL Instance (Separate Databases)") {
+        ContainerDb(metadata_pg, "Platform Metadata DB", "PostgreSQL", "Реестр тенантов, маппинг tenant_id -> db_name")
+        ContainerDb(tenant_a_pg, "DB: tenant_A", "PostgreSQL", "Изолированная база данных фермы A")
+        ContainerDb(tenant_b_pg, "DB: tenant_B", "PostgreSQL", "Изолированная база данных фермы B")
+    }
+}
+
+Rel(farm_agent_a, api_gw, "Синхронизация данных фермы", "HTTPS REST")
+Rel(farm_agent_b, api_gw, "Синхронизация данных фермы", "HTTPS REST")
+
+Rel(api_gw, db_router, "CRUD с tenant_id")
+
+Rel(db_router, tenant_a_pg, "Подключение к БД tenant_A")
+Rel(db_router, tenant_b_pg, "Подключение к БД tenant_B")
+Rel(db_router, metadata_pg, "tenant_id -> db_name")
+@enduml

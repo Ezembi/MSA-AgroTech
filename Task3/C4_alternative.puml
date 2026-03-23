@@ -1,0 +1,168 @@
+@startuml
+title C4 — Диаграмма кода: Backend сервера на ферме (Альтернатива — Тонкий клиент)
+
+note as N1
+  Компонент: Backend сервера на ферме
+  Контейнер: Java/Spring
+  Описание: Тонкий клиент — приём IoT-событий,
+  буферизация при потере связи и синхронизация
+  с центральным сервером
+end note
+
+' ============ Доменные сущности ============
+class IoTEvent {
+    - id: Integer
+    - deviceId: String
+    - eventType: IoTEventType
+    - payload: Map<String, Object>
+    - occurredAt: Instant
+}
+
+enum IoTEventType {
+    SENSOR_DATA
+    VIDEO_FRAME
+    FEED_LEVEL
+    WATER_LEVEL
+    MOVEMENT
+    ANOMALY
+}
+
+class CachedEvent {
+    - id: Integer
+    - eventJson: String
+    - status: CacheStatus
+    - createdAt: Instant
+    - retryCount: Integer
+    - nextRetryAt: Instant
+}
+
+enum CacheStatus {
+    PENDING
+    FORWARDED
+    FAILED
+}
+
+class DeviceCommand {
+    - id: Integer
+    - deviceId: String
+    - commandType: CommandType
+    - payload: Map<String, Object>
+    - receivedAt: Instant
+    - status: CommandStatus
+}
+
+enum CommandType {
+    OPEN_FEEDER
+    CLOSE_FEEDER
+    OPEN_DRINKER
+    ADJUST_FLOW
+}
+
+enum CommandStatus {
+    RECEIVED
+    DISPATCHED
+    FAILED
+}
+
+class SyncStatus {
+    - connectedToCentral: boolean
+    - lastSyncAt: Instant
+    - pendingCount: Integer
+}
+
+' ============ Сервисы ============
+class SyncService {
+    - eventForwarder: EventForwarder
+    - offlineBuffer: OfflineBuffer
+    - retryScheduler: RetryScheduler
+    + handleEvent(event: IoTEvent): void
+    + flushBuffer(): void
+    + getStatus(): SyncStatus
+    - isOnline(): boolean
+}
+
+class EventForwarder {
+    - centralServerUrl: String
+    - restTemplate: RestTemplate
+    + forward(event: IoTEvent): boolean
+    + forwardBatch(events: List<CachedEvent>): int
+}
+
+class OfflineBuffer {
+    - maxRetries: int
+    + buffer(event: IoTEvent): CachedEvent
+    + getPending(): List<CachedEvent>
+    + markForwarded(id: Integer): void
+    + markFailed(id: Integer): void
+    + incrementRetry(id: Integer): void
+}
+
+class RetryScheduler {
+    - syncService: SyncService
+    + scheduleFlush(): void
+    + cancelFlush(): void
+}
+
+class NotificationService {
+    - commandDispatcher: CommandDispatcher
+    - pushClient: PushClient
+    + onCommand(command: DeviceCommand): void
+    + onAlert(payload: String): void
+}
+
+class CommandDispatcher {
+    - edgeApiUrl: String
+    - restTemplate: RestTemplate
+    + dispatch(command: DeviceCommand): void
+}
+
+class PushClient {
+    - fcmUrl: String
+    + sendPush(recipientToken: String, message: String): void
+}
+
+' ============ Kafka-консьюмер ============
+class KafkaCommandListener {
+    - notificationService: NotificationService
+    - objectMapper: ObjectMapper
+    + onMessage(record: ConsumerRecord<String, String>): void
+}
+
+' ============ REST-контроллеры ============
+class IoTEventController {
+    - syncService: SyncService
+    + receiveEvent(event: IoTEvent): ResponseEntity
+}
+
+class StatusController {
+    - syncService: SyncService
+    + getStatus(): ResponseEntity
+}
+
+' ============ Связи — сервисы ============
+SyncService --> EventForwarder
+SyncService --> OfflineBuffer
+SyncService --> RetryScheduler
+
+NotificationService --> CommandDispatcher
+NotificationService --> PushClient
+
+KafkaCommandListener --> NotificationService
+
+' ============ Связи — контроллеры ============
+IoTEventController --> SyncService
+StatusController --> SyncService
+
+' ============ Связи — сущности ============
+IoTEvent --> IoTEventType
+CachedEvent --> CacheStatus
+DeviceCommand --> CommandType
+DeviceCommand --> CommandStatus
+
+SyncService ..> IoTEvent : consumes
+SyncService ..> SyncStatus : produces
+OfflineBuffer ..> CachedEvent : manages
+EventForwarder ..> IoTEvent : forwards
+NotificationService ..> DeviceCommand : consumes
+
+@enduml

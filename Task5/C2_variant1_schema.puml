@@ -1,0 +1,28 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+title C2 — Вариант 1: Изоляция на уровне схем БД (Shared Database, Separate Schemas)
+
+System_Ext(farm_agent_a, "Агент на ферме A (Толстый клиент)", "MVP-агент на ферме клиента A")
+System_Ext(farm_agent_b, "Агент на ферме B (Толстый клиент)", "MVP-агент на ферме клиента B")
+
+Container_Boundary(saas, "SaaS — Мультитенантная платформа") {
+    Container(api_gw, "API Gateway", "Kong / Nginx", "Маршрутизация")
+    Container(tenant_resolver, "Tenant Resolver", "Java/Spring Filter", "Определяет тенанта по JWT-claim / subdomain, добавляет schema в контекст запроса")
+
+    Container_Boundary(shared_pg_db_boundary, "Единый кластер\nкаждый тенант получает изолированную схему:\nschema_tenant_a, schema_tenant_b, ...") {
+        ContainerDb(schema_pg_tenant_a, "Schema: tenant_a", "PostgreSQL", "Данные с фермы клиента A")
+        ContainerDb(schema_pg_tenant_b, "Schema: tenant_b", "PostgreSQL", "Данные с фермы клиента B")
+        ContainerDb(schema_pg_common, "Schema: public", "PostgreSQL", "Общие справочники")
+    }
+}
+
+Rel(farm_agent_a, api_gw, "Синхронизация данных фермы A", "HTTPS REST")
+Rel(farm_agent_b, api_gw, "Синхронизация данных фермы B", "HTTPS REST")
+
+Rel(api_gw, tenant_resolver, "HTTPS REST")
+
+Rel(tenant_resolver, schema_pg_tenant_a, "Чтение/запись для тенанта A")
+Rel(tenant_resolver, schema_pg_tenant_b, "Чтение/запись для тенанта B")
+Rel(tenant_resolver, schema_pg_common, "Чтение")
+@enduml

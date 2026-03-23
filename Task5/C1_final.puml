@@ -1,0 +1,33 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+
+title C1 — Контекстная диаграмма финального SaaS-решения "АгроТехPro SaaS"
+
+Person(saas_admin, "Администратор платформы", "Управляет платформой, тенантами, инфраструктурой")
+Person(tenant_admin, "Администратор клиента\n(агрохолдинг)", "Управляет своими фермами,\nпользователями и подпиской")
+Person(tenant_staff, "Персонал клиента", "Ветеринары, операторы,\nживотноводы на фермах")
+Person(developer, "Разработчик клиента", "Интегрирует внешние системы\nклиента через API платформы")
+
+System(saas_platform, "АгроТехPro SaaS", "Центральная мультитенантная SaaS-платформа\nмониторинга свиноводческих ферм.\nОбеспечивает изоляцию данных между клиентами,\nбиллинг, API и панель самообслуживания.")
+
+System_Ext(farm_agent, "Агент на ферме\n(Толстый клиент)", "MVP-агент, развёрнутый на ферме клиента.\nРаботает автономно, синхронизирует данные\nс платформой при наличии связи.")
+
+System_Ext(payment_yukassa, "ЮKassa", "Российская платёжная система.\nОбработка подписок и разовых платежей.")
+System_Ext(payment_cloudpayments, "CloudPayments", "Российская платёжная система.\nАльтернативный провайдер для биллинга.")
+System_Ext(erp_client, "ERP-системы клиентов\n(1С:Агро и др.)", "Интеграция данных поголовья,\nфинансов, складов кормов.")
+System_Ext(sms_email_provider, "Провайдеры уведомлений\n(SMS / Email)", "Доставка критичных алертов\nи billing-уведомлений.")
+
+Rel(saas_admin, saas_platform, "Управление платформой и тенантами", "Web-консоль")
+Rel(tenant_admin, saas_platform, "Управление аккаунтом, фермами, подпиской", "Web / Mobile")
+Rel(tenant_staff, saas_platform, "Мониторинг животных и управление устройствами", "Web / Mobile")
+Rel(developer, saas_platform, "Интеграция через API платформы", "REST API / Webhooks")
+
+Rel(farm_agent, saas_platform, "Синхронизация данных ферм\n(метрики, события, алерты)", "HTTPS REST")
+Rel(saas_platform, farm_agent, "Команды управления устройствами", "HTTPS REST / Push")
+
+Rel(saas_platform, payment_yukassa, "Списание по подписке / разовые платежи", "REST API")
+Rel(saas_platform, payment_cloudpayments, "Списание по подписке / разовые платежи", "REST API")
+Rel(saas_platform, erp_client, "Экспорт данных поголовья и инцидентов", "REST API / Webhooks")
+Rel(saas_platform, sms_email_provider, "Отправка алертов и billing-уведомлений", "SMTP / REST API")
+
+@enduml

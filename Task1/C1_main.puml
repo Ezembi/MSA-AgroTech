@@ -1,0 +1,39 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+title Основная контекстная C1 диаграмма
+
+Person(administrator, "Управляющий фермой", "Получает отчеты и сводки")
+Person(staff, "Ветеринары, сопутствующий персонал", "Мониторинг системы, управления кормушками/поилками")
+Person(security, "Животновод", "Отслеживания критических сигналов, требующих вмешательства")
+
+System_Boundary(agro_x, "АгроПром Х - Цифровая платформа") {
+    System(central_server, "Центральный сервер", "Агрегирует данные со всех ферм")
+    System_Boundary(farm_main, "Ферма", "Управление одним животноводческим комплексом") {
+        System(farm_server, "Центральный сервер на ферме", "Агрегирует данные с фермы")
+        System(edge, "Edge-устройства")
+        System_Boundary(iot, "Внешние устройства"){
+            System(iot_animal, "Датчики на животных")
+            System(iot_camera, "Камеры")
+            System(iot_feeders, "Кормушки")
+            System(iot_drinkers, "Поилки")
+        }
+    }
+}
+
+System_Ext(erp_1c, "ERP Система (1C:Агро)", "Учет поголовья, финансы, склад кормов.")
+
+Rel(iot_animal, edge, "Отправка данных")
+Rel(iot_camera, edge, "Отправка данных")
+Rel(iot_feeders, edge, "Отправка/получение данных")
+Rel(iot_drinkers, edge, "Отправка/получение данных")
+Rel(edge, farm_server, "Отправка/получение данных по WIFI")
+Rel(edge, farm_server, "Отправка/получение данных по 4G (альтернативный подход)")
+Rel(farm_server, central_server, "Отправка/получение данных")
+Rel(central_server, erp_1c, "Отправка/получение данных")
+
+Rel(administrator, farm_server, "Просмотр отчётов/метрик")
+Rel(staff, farm_server, "Мониторинг скота, управления кормушками/поилками")
+Rel(security, farm_server, "Отслеживание критичных сигналов")
+
+@enduml

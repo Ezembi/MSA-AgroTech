@@ -1,0 +1,28 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+title C2 — Вариант 3: Изоляция на уровне инстансов БД (Separate Database Instances per Tenant)
+
+System_Ext(farm_agent_a, "Агент на ферме A (Толстый клиент)", "MVP-агент на ферме клиента A")
+System_Ext(farm_agent_b, "Агент на ферме B (Толстый клиент)", "MVP-агент на ферме клиента B")
+
+Container_Boundary(saas, "SaaS — Мультитенантная платформа") {
+    Container(api_gw, "API Gateway", "Kong / Nginx", "Маршрутизация")
+    Container(db_registry, "DB Instance Registry", "Java/Spring", "Хранит connection strings к инстансам БД тенантов; динамически предоставляет соединения")
+
+    Container_Boundary(tenant_instances, "Dedicated DB Instances per Tenant") {
+        ContainerDb(metadata_pg, "Platform Metadata DB", "PostgreSQL", "Реестр тенантов, маппинг tenant_id -> db_instance_url")
+        ContainerDb(instance_pg_a, "PostgreSQL Instance: tenant_a", "PostgreSQL (отдельный pod/VM)", "Полностью изолированный инстанс для фермы A")
+        ContainerDb(instance_pg_b, "PostgreSQL Instance: tenant_b", "PostgreSQL (отдельный pod/VM)", "Полностью изолированный инстанс для фермы B")
+    }
+}
+
+Rel(farm_agent_a, api_gw, "Синхронизация данных фермы A", "HTTPS REST")
+Rel(farm_agent_b, api_gw, "Синхронизация данных фермы B", "HTTPS REST")
+
+Rel(api_gw, db_registry, "Получение connection к инстансу по tenant_id")
+
+Rel(db_registry, metadata_pg, "tenant_id -> db_instance_url")
+Rel(db_registry, instance_pg_a, "Подключение к инстансу tenant_A")
+Rel(db_registry, instance_pg_b, "Подключение к инстансу tenant_B")
+@enduml

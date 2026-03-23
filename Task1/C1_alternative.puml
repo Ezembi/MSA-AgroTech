@@ -1,0 +1,40 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+title Альтернативная контекстная C1 диаграмма (Тонкий клиент)
+
+Person(administrator, "Управляющий фермой", "Получает отчеты и сводки")
+Person(staff, "Ветеринары, сопутствующий персонал", "Мониторинг скота, управление кормушками/поилками")
+Person(security, "Животновод", "Отслеживание критических сигналов, требующих вмешательства")
+
+System_Boundary(agro_x, "АгроПром Х - Цифровая платформа") {
+    System(central_server, "Центральный сервер (ML/AI)", "Обрабатывает данные всех ферм, запускает ML-модели, формирует отчёты и отправляет команды управления")
+    System_Boundary(farm_main, "Ферма", "Тонкий клиент — агрегация и трансляция данных") {
+        System(farm_relay, "Локальный сервер-ретранслятор", "Собирает данные с Edge-устройств и транслирует на центральный сервер онлайн, проксирует команды управления")
+        System(edge, "Edge-устройства")
+        System_Boundary(iot, "Внешние устройства") {
+            System(iot_animal, "Датчики на животных")
+            System(iot_camera, "Камеры")
+            System(iot_feeders, "Кормушки")
+            System(iot_drinkers, "Поилки")
+        }
+    }
+}
+
+System_Ext(erp_1c, "ERP Система (1C:Агро)", "Учет поголовья, финансы, склад кормов.")
+System_Ext(ml, "ML модель", "Анализ видеопотока/датчиков")
+
+Rel(iot_animal, edge, "Отправка данных")
+Rel(iot_camera, edge, "Отправка данных (видеопоток)")
+Rel(iot_feeders, edge, "Отправка/получение данных")
+Rel(iot_drinkers, edge, "Отправка/получение данных")
+Rel(edge, farm_relay, "Отправка/получение данных по WIFI")
+Rel(farm_relay, central_server, "Трансляция потока данных онлайн / получение команд управления (Internet)")
+Rel(central_server, erp_1c, "Отправка/получение данных")
+Rel(central_server, ml, "Отправка/получение данных")
+
+Rel(administrator, central_server, "Просмотр отчётов/метрик")
+Rel(staff, central_server, "Мониторинг скота, управление кормушками/поилками")
+Rel(security, central_server, "Отслеживание критичных сигналов")
+
+@enduml

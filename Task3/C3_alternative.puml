@@ -1,0 +1,62 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+title C3 — Компонентная диаграмма: Backend сервера на ферме (Альтернатива — Тонкий клиент)
+
+Person(administrator, "Управляющий фермой")
+Person(staff, "Ветеринары / Персонал")
+Person(security, "Животновод")
+
+System_Boundary(iot, "Внешние устройства"){
+    System(iot_animal, "Датчики на животных")
+    System(iot_camera, "Камеры")
+    System(iot_feeders, "Кормушки")
+    System(iot_drinkers, "Поилки")
+}
+
+Container(edge, "Edge-API", "Java/Spring", "Шина IoT-устройств")
+Container(ml_service, "ML Service", "Python", "Анализ видеопотока, подсчёт животных")
+Container(central_server, "Backend центрального сервера", "Java/Spring")
+Container(web_app, "Web-приложение", "TypeScript/Python")
+Container(mobile_app, "Мобильное приложение", "Flutter")
+
+ContainerQueue(kafka, "Kafka", "Kafka", "Брокер сообщений")
+
+ContainerDb(local_pg, "PostgreSQL", "PostgreSql", "Животные, инциденты, устройства")
+ContainerDb(local_s3, "S3", "S3", "Фото/видео с камер")
+
+Container_Boundary(farm_backend, "Backend сервера на ферме (Java/Spring)") {
+    Component(api_gateway, "API Gateway", "Spring Service", "Маршрутизация входящих запросов")
+    Component(sync_service, "Sync Service", "Python", "Синхронизация с центральным сервером")
+    Component(notification_service, "Notification Service", "Spring Service", "Отправка уведомлений дежурному персоналу/Сообщений управления устройствами")
+}
+
+Rel(edge, api_gateway, "REST API (данные IoT)")
+Rel(web_app, api_gateway, "REST API")
+Rel(mobile_app, api_gateway, "REST API")
+
+Rel(iot_animal, edge, "Отправка данных")
+Rel(iot_camera, edge, "Отправка данных")
+Rel(iot_feeders, edge, "Отправка/получение данных")
+Rel(iot_drinkers, edge, "Отправка/получение данных")
+
+Rel(staff, mobile_app, "Мониторинг, управление")
+Rel(security, mobile_app, "Отслеживание критичных сигналов")
+Rel(administrator, web_app, "Просмотр отчётов/метрик")
+
+Rel(central_server, ml_service, "REST API: анализ видео")
+Rel(central_server, kafka, "Публикация событий (управление устройствами/алертинг и т.д.)")
+
+Rel(kafka, notification_service, "Отправка событий")
+
+Rel(notification_service, edge, "Отправка команд управления")
+Rel(notification_service, mobile_app, "Отправка оповещения")
+
+Rel(api_gateway, sync_service, "Вызов по API (анализ видео/события с датчиков/отправка команд и т.д.)")
+Rel(api_gateway, central_server, "Вызов по API (получение метрик/отчётов/просмотр событий и т.д.)")
+
+Rel(sync_service, sync_service, "Переотправка подвисших данных при отсутствии связи")
+Rel(sync_service, central_server, "Вызов по API")
+Rel(sync_service, local_s3, "S3 API (кеширование)")
+Rel(sync_service, local_pg, "CRUD (кеширование)")
+@enduml

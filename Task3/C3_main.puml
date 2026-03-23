@@ -1,0 +1,88 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+title C3 — Компонентная диаграмма: Backend сервера на ферме (Основное решение — Толстый клиент)
+
+Person(administrator, "Управляющий фермой")
+Person(staff, "Ветеринары / Персонал")
+Person(security, "Животновод")
+
+System_Boundary(iot, "Внешние устройства"){
+    System(iot_animal, "Датчики на животных")
+    System(iot_camera, "Камеры")
+    System(iot_feeders, "Кормушки")
+    System(iot_drinkers, "Поилки")
+}
+
+Container(edge, "Edge-API", "Java/Spring", "Шина IoT-устройств")
+Container(ml_service, "ML Service", "Python", "Анализ видеопотока, подсчёт животных")
+Container(sync_service, "Sync Service", "Python", "Синхронизация с центральным сервером")
+Container(central_server, "Backend центрального сервера", "Java/Spring")
+Container(web_app, "Web-приложение", "TypeScript/Python")
+Container(mobile_app, "Мобильное приложение", "Flutter")
+
+ContainerQueue(kafka, "Kafka", "Kafka", "Брокер сообщений")
+
+ContainerDb(local_pg, "PostgreSQL", "PostgreSql", "Животные, инциденты, устройства")
+ContainerDb(local_s3, "S3", "S3", "Фото/видео с камер")
+ContainerDb(local_ch, "ClickHouse", "ClickHouse")
+
+Container_Boundary(farm_backend, "Backend сервера на ферме (Java/Spring)") {
+
+    Component(api_gateway, "API Gateway", "Spring MVC / REST", "Маршрутизация входящих запросов")
+
+    Component(metrics_service, "Metrics Service", "Spring Service", "Сбор/построение базовых и кастомных метрик")
+    Component(monitoring_service, "Monitoring Service", "Spring Service", "Приём данных с датчиков и камер")
+    Component(feed_water_service, "Feed & Water Service", "Spring Service", "Управление кормушками и поилками")
+
+    Component(alert_service, "Alert Service", "Spring Service", "Формирование и отправка оповещений об инцидентах")
+    Component(animal_service, "Animal Service", "Spring Service", "Состояние животных, подсчёт поголовья")
+    Component(video_service, "Video Analytics Service", "Spring Service", "Координация анализа видеопотока с ML Service")
+
+    Component(notification_service, "Notification Service", "Spring Service", "Отправка уведомлений дежурному персоналу/Сообщений управления устройствами")
+    Component(trans_outbox, "Transactional outbox", "Spring Service", "Сервис по отправки сообщений в кафку")
+}
+
+Rel(edge, api_gateway, "REST API (данные IoT)")
+Rel(web_app, api_gateway, "REST API")
+Rel(mobile_app, api_gateway, "REST API")
+
+Rel(iot_animal, edge, "Отправка данных")
+Rel(iot_camera, edge, "Отправка данных")
+Rel(iot_feeders, edge, "Отправка/получение данных")
+Rel(iot_drinkers, edge, "Отправка/получение данных")
+
+Rel(staff, mobile_app, "Мониторинг, управление")
+Rel(security, mobile_app, "Отслеживание критичных сигналов")
+Rel(administrator, web_app, "Просмотр отчётов/метрик")
+
+Rel(api_gateway, metrics_service, "GET /metrics")
+Rel(api_gateway, feed_water_service, "Управление кормушками/поилками")
+Rel(api_gateway, monitoring_service, "POST /events")
+
+Rel(video_service, ml_service, "REST API: анализ видео")
+Rel(video_service, local_s3, "S3 API")
+
+Rel(metrics_service, local_ch, "JDBC")
+Rel(animal_service, local_pg, "CRUD")
+
+Rel(trans_outbox, kafka, "Команды устройствам")
+Rel(trans_outbox, local_pg, "CRUD")
+
+Rel(feed_water_service, trans_outbox, "Команды устройствам")
+Rel(feed_water_service, local_pg, "CRUD")
+
+Rel(kafka, notification_service, "Отправка событий")
+
+Rel(notification_service, edge, "Отправка команд управления")
+Rel(notification_service, mobile_app, "Отправка оповещения")
+
+Rel(monitoring_service, animal_service, "Обновление состояния животных")
+Rel(monitoring_service, alert_service, "Создание алерта при инциденте")
+Rel(monitoring_service, video_service, "Передача кадра на анализ")
+
+Rel(alert_service, trans_outbox, "Публикация алерта")
+
+Rel(farm_backend, sync_service, "Вызов по API")
+Rel(sync_service, central_server, "Вызов по API")
+@enduml
