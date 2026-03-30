@@ -1,0 +1,53 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+title C2 — To-Be: SaaS-платформа "АгроТехPro SaaS"
+
+System_Boundary(saas, "АгроТехPro Cloud Cluster") {
+
+    Container(api_gw, "API Gateway", "Kong / Nginx", "Rate limiting, routing, SSL termination")
+    Container(dev_portal, "Developer Portal", "Docusaurus + Swagger UI", "Документация API, sandbox, API-ключи")
+
+    Container(auth, "Auth Service", "Keycloak", "OAuth2 / OIDC, realm per tenant, SSO")
+    Container(tenant_mgr, "Tenant Manager", "Java/Spring", "Реестр клиентов, провизионинг БД")
+
+    Container(farm_agg, "Farm Aggregation Service", "Java/Spring", "Приём sync-данных с ферм, агрегация событий")
+    Container(core_logic, "Core Business Logic", "Java/Spring", "Аналитика поголовья, алерты, метрики")
+
+    Container(billing, "Billing Service", "Java/Spring", "Тарификация, выставление счетов")
+    Container(payment_adapter, "Payment Adapter", "Java/Spring", "Интеграция с ЮKassa / CloudPayments")
+
+    Container(self_service, "Self-Service Portal", "TypeScript/React", "Личный кабинет: фермы, подписка, отчёты")
+
+    ContainerQueue(kafka, "Message Broker", "Apache Kafka", "Async-обмен: события ферм, биллинг, алерты")
+
+    ContainerDb(tenant_dbs, "Tenant Databases", "PostgreSQL", "Отдельная БД на каждого тенанта")
+    ContainerDb(metrics_db, "Metrics Store", "ClickHouse", "Usage-метрики для биллинга и аналитики")
+    ContainerDb(cache, "Cache", "Redis", "Сессии, rate-limit, tenant-конфиг")
+}
+
+System_Ext(farm_agent, "Агент на ферме (Толстый клиент)", "MVP-агент, синхронизирует данные по HTTPS")
+System_Ext(payment_sys, "ЮKassa / CloudPayments", "Российские платёжные системы")
+
+Rel(farm_agent, api_gw, "Sync данных фермы", "HTTPS REST")
+Rel(api_gw, auth, "Validate Token")
+Rel(api_gw, farm_agg, "POST /sync")
+Rel(api_gw, core_logic, "API Requests")
+Rel(api_gw, dev_portal, "/docs")
+
+Rel(farm_agg, kafka, "Публикация событий ферм")
+Rel(kafka, core_logic, "Потребление событий")
+Rel(kafka, billing, "Usage Events")
+
+Rel(core_logic, tenant_mgr, "Resolve DB context")
+Rel(core_logic, tenant_dbs, "CRUD")
+Rel(core_logic, metrics_db, "Запись метрик")
+Rel(api_gw, cache, "Rate-limit / сессии")
+
+Rel(billing, payment_adapter, "Create Payment")
+Rel(payment_adapter, payment_sys, "API Calls")
+Rel(billing, tenant_dbs, "Update Subscription Status")
+
+Rel(self_service, api_gw, "REST API", "HTTPS")
+
+@enduml

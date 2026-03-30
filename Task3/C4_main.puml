@@ -1,0 +1,261 @@
+@startuml
+title C4 — Диаграмма кода: Backend сервера на ферме (Основное решение — Толстый клиент)
+
+note as N1
+  Компонент: Backend сервера на ферме
+  Контейнер: Java/Spring
+  Описание: Обработка IoT-событий, управление животными,
+  видеоаналитика, оповещения и управление устройствами
+end note
+
+' ============ Доменные сущности ============
+class Animal {
+    - id: Integer
+    - tagId: String
+    - species: String
+    - status: AnimalStatus
+    - lastSeenAt: Instant
+    - location: String
+}
+
+enum AnimalStatus {
+    HEALTHY
+    SICK
+    INJURED
+    MISSING
+    DEAD
+}
+
+class IoTEvent {
+    - id: Integer
+    - deviceId: String
+    - eventType: IoTEventType
+    - payload: Map<String, Object>
+    - occurredAt: Instant
+}
+
+enum IoTEventType {
+    SENSOR_DATA
+    VIDEO_FRAME
+    FEED_LEVEL
+    WATER_LEVEL
+    MOVEMENT
+    ANOMALY
+}
+
+class Alert {
+    - id: Integer
+    - animalId: Integer
+    - type: AlertType
+    - severity: AlertSeverity
+    - status: AlertStatus
+    - description: String
+    - detectedAt: Instant
+    + isResolved(): boolean
+    + acknowledge(operatorId: Integer): void
+}
+
+enum AlertType {
+    FIGHT
+    DEATH
+    PIGLET_CRUSH
+    ILLNESS
+    WATER_SYSTEM_FAULT
+    FOOD_LOW
+}
+
+enum AlertSeverity {
+    LOW
+    MEDIUM
+    HIGH
+    CRITICAL
+}
+
+enum AlertStatus {
+    NEW
+    NOTIFIED
+    ACKNOWLEDGED
+    RESOLVED
+}
+
+class FeedingRecord {
+    - id: Integer
+    - feederId: String
+    - amount: Double
+    - timestamp: Instant
+    - triggeredBy: TriggerType
+}
+
+class WateringRecord {
+    - id: Integer
+    - drinkerId: String
+    - volume: Double
+    - timestamp: Instant
+}
+
+class OutboxMessage {
+    - id: Integer
+    - topic: String
+    - key: String
+    - payload: String
+    - status: OutboxStatus
+    - createdAt: Instant
+    - sentAt: Instant
+}
+
+enum OutboxStatus {
+    PENDING
+    SENT
+    FAILED
+}
+
+class DeviceCommand {
+    - id: Integer
+    - deviceId: String
+    - commandType: CommandType
+    - payload: Map<String, Object>
+    - receivedAt: Instant
+    - status: CommandStatus
+}
+
+enum CommandType {
+    OPEN_FEEDER
+    CLOSE_FEEDER
+    OPEN_DRINKER
+    ADJUST_FLOW
+}
+
+enum CommandStatus {
+    RECEIVED
+    DISPATCHED
+    FAILED
+}
+
+' ============ Сервисы ============
+class MonitoringService {
+    - animalService: AnimalService
+    - alertService: AlertService
+    - videoAnalyticsService: VideoAnalyticsService
+    + processEvent(event: IoTEvent): void
+    - routeByEventType(event: IoTEvent): void
+}
+
+class AnimalService {
+    + updateStatus(animalId: Integer, status: AnimalStatus): void
+    + getAnimal(id: Integer): Optional<Animal>
+    + getAll(): List<Animal>
+    + countActive(): int
+}
+
+class AlertService {
+    - outboxService: TransactionalOutboxService
+    + processEvent(event: IoTEvent): void
+    + acknowledgeAlert(alertId: Integer, operatorId: Integer): void
+    + resolveAlert(alertId: Integer, operatorId: Integer): void
+    + getActiveAlerts(): List<Alert>
+}
+
+class VideoAnalyticsService {
+    + analyzeFrame(event: IoTEvent): void
+    - storeFrame(imageData: byte[]): String
+}
+
+class FeedWaterService {
+    - outboxService: TransactionalOutboxService
+    + triggerFeeding(feederId: String, amount: Double): void
+    + triggerWatering(drinkerId: String): void
+    + getDeviceStatus(deviceId: String): DeviceStatus
+}
+
+class TransactionalOutboxService {
+    - objectMapper: ObjectMapper
+    + publish(topic: String, key: String, payload: Object): void
+}
+
+class OutboxPoller {
+    - kafkaTemplate: KafkaTemplate<String, String>
+    + pollAndSend(): void
+}
+
+class NotificationService {
+    - commandDispatcher: CommandDispatcher
+    - pushClient: PushClient
+    + onCommand(command: DeviceCommand): void
+    + onAlert(payload: String): void
+}
+
+class CommandDispatcher {
+    - edgeApiUrl: String
+    - restTemplate: RestTemplate
+    + dispatch(command: DeviceCommand): void
+}
+
+class PushClient {
+    - fcmUrl: String
+    + sendPush(recipientToken: String, message: String): void
+}
+
+class KafkaCommandListener {
+    - notificationService: NotificationService
+    - objectMapper: ObjectMapper
+    + onMessage(record: ConsumerRecord<String, String>): void
+}
+
+' ============ REST-контроллеры ============
+class IoTEventController {
+    - monitoringService: MonitoringService
+    + receiveEvent(event: IoTEvent): ResponseEntity
+}
+
+class FeedWaterController {
+    - feedWaterService: FeedWaterService
+    + triggerFeeding(request: FeedingRequest): ResponseEntity
+    + triggerWatering(request: WateringRequest): ResponseEntity
+}
+
+class AlertController {
+    - alertService: AlertService
+    + getActiveAlerts(): ResponseEntity
+    + acknowledgeAlert(alertId: Integer, operatorId: Integer): ResponseEntity
+}
+
+' ============ Связи — сервисы ============
+MonitoringService --> AnimalService
+MonitoringService --> AlertService
+MonitoringService --> VideoAnalyticsService
+
+AlertService --> TransactionalOutboxService
+
+FeedWaterService --> TransactionalOutboxService
+
+TransactionalOutboxService --> OutboxPoller
+
+NotificationService --> CommandDispatcher
+NotificationService --> PushClient
+
+KafkaCommandListener --> NotificationService
+
+' ============ Связи — контроллеры ============
+IoTEventController --> MonitoringService
+FeedWaterController --> FeedWaterService
+AlertController --> AlertService
+
+' ============ Связи — сущности ============
+Animal --> AnimalStatus
+IoTEvent --> IoTEventType
+Alert --> AlertType
+Alert --> AlertSeverity
+Alert --> AlertStatus
+OutboxMessage --> OutboxStatus
+
+DeviceCommand --> CommandType
+DeviceCommand --> CommandStatus
+
+MonitoringService ..> IoTEvent : consumes
+NotificationService ..> DeviceCommand : consumes
+AlertService ..> Alert : creates
+FeedWaterService ..> FeedingRecord : creates
+FeedWaterService ..> WateringRecord : creates
+TransactionalOutboxService ..> OutboxMessage : creates
+
+@enduml

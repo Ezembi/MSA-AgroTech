@@ -1,0 +1,65 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+title Альтернативная контекстная C2 диаграмма (Тонкий клиент)
+
+Person(administrator, "Управляющий фермой", "Получает отчеты и сводки")
+Person(staff, "Ветеринары, сопутствующий персонал", "Мониторинг системы, управления кормушками/поилками")
+Person(security, "Животновод", "Отслеживания критических сигналов, требующих вмешательства")
+
+Container_Boundary(agro_x, "АгроПром Х - Цифровая платформа") {
+    Container(agro_x_main_backend, "Backend центрального сервера", "Java/Spring", "Агрегирует данные со всех ферм")
+    Container(agro_x_user_auth_service, "Сервис аутентификации пользователей", "Java/Spring", "Управление пользователями и ролями")
+    Container(agro_x_ml_service, "ML Service", "Python", "Анализ видео с камер(фиксация драк, гибели, подсчет животных)")
+    Container_Boundary(agro_x_db, "Базы данных центрального сервера"){
+        ContainerDb(agro_x_main_pg, "Основная БД", "PostgreSql")
+        ContainerDb(agro_x_s3, "Общее файло-хранилище", "S3", "Фото/видео с камер")
+        ContainerDb(agro_x_user_pg, "Основная БД для управления персоналом", "PostgreSql")
+    }
+
+    Container_Boundary(farm_main, "Ферма", "Управление одним животноводческим комплексом") {
+        Container(farm_main_backend, "Backend сервера на ферме", "Python", "Агрегирует данные с фермы")
+
+        Container(web_app, "Web приложение", "TypeScript/Python")
+        Container(mobile_app, "Мобильное приложение", "Flutter", "Android/IPhone")
+
+        ContainerQueue(kafka, "Message queue", "Kafka", "Основной брокер сообщений")
+
+        Container(edge, "Edge-API", "Java/Spring", "Шина для передачи всех сигналов на сервер и устройства")
+        System_Boundary(iot, "Внешние устройства"){
+            System(iot_animal, "Датчики на животных")
+            System(iot_camera, "Камеры")
+            System(iot_feeders, "Кормушки")
+            System(iot_drinkers, "Поилки")
+        }
+    }
+}
+
+System_Ext(erp_1c, "ERP Система (1C:Агро)", "Учет поголовья, финансы, склад кормов")
+
+Rel(iot_animal, edge, "Отправка данных")
+Rel(iot_camera, edge, "Отправка данных")
+Rel(iot_feeders, edge, "Отправка/получение данных")
+Rel(iot_drinkers, edge, "Отправка/получение данных")
+Rel(edge, farm_main_backend, "Вызов по API")
+
+Rel(farm_main_backend, kafka, "Публикация сообщения")
+Rel(farm_main_backend, agro_x_main_backend, "Отправка/получение данных")
+Rel(kafka, edge, "Вызов по API")
+
+Rel(web_app, farm_main_backend, "Вызов по API")
+Rel(web_app, agro_x_user_auth_service, "Вызов по API")
+Rel(mobile_app, farm_main_backend, "Вызов по API")
+Rel(mobile_app, agro_x_user_auth_service, "Вызов по API")
+
+Rel(agro_x_main_backend, agro_x_main_pg, "CRUD")
+Rel(agro_x_main_backend, agro_x_s3, "Хранение/чтение файлов")
+Rel(agro_x_main_backend, erp_1c, "Отправка/получение данных")
+Rel(agro_x_user_auth_service, agro_x_user_pg, "CRUD")
+Rel(agro_x_main_backend, agro_x_ml_service, "Вызов по API")
+
+Rel(administrator, web_app, "Просмотр отчётов/метрик")
+Rel(staff, mobile_app, "Мониторинг скота, управления кормушками/поилками")
+Rel(security, mobile_app, "Отслеживание критичных сигналов")
+
+@enduml

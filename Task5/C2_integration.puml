@@ -1,0 +1,26 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+title C2 — Пример интеграции: "АгроТех Х" как клиент SaaS-платформы
+
+System_Boundary(client_env, "Инфраструктура АгроТех Х (Клиент)") {
+    Container(farm_edge, "Агент на ферме", "Толстый клиент (существующий MVP)", "Локальная автоматизация фермы, offline-работа")
+    Container(erp_1c, "ERP 1С:Агро", "1C Platform", "Учёт поголовья, финансы")
+    Container(saas_adapter, "SaaS Adapter", "Java/Spring", "Кастомный коннектор: синхронизация 1С с платформой")
+    Container(client_web, "Web-портал АгроТех Х", "TypeScript", "Дашборды и отчёты по всем фермам")
+}
+
+System_Boundary(saas, "АгроТехPro SaaS") {
+    Container(public_api, "Public API", "REST/JSON", "Входная точка для клиентов")
+    Container(auth, "Auth Service", "OAuth2 / Keycloak", "Выдача токенов, tenant: agrotech_x")
+    Container(webhook_svc, "Webhook Service", "Java/Spring", "Push-уведомления о событиях на фермах")
+}
+
+Rel(farm_edge, public_api, "1. Push sync-данных фермы (HTTPS)", "API Key")
+Rel(saas_adapter, auth, "2. Authenticate (Client Credentials)")
+Rel(saas_adapter, public_api, "3. GET /analytics, /incidents")
+Rel(saas_adapter, erp_1c, "4. Обновление учёта поголовья")
+Rel(webhook_svc, saas_adapter, "5. Webhook: animal.death / herd.count.updated")
+Rel(client_web, public_api, "GET /farms, /dashboard", "Bearer Token")
+
+@enduml
